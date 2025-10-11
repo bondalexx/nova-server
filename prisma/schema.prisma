@@ -1,0 +1,134 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ---------- Enums ----------
+enum RoomType {
+  DIRECT
+  GROUP
+}
+
+enum RoomRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  FILE
+  SYSTEM
+}
+
+// ---------- Models ----------
+enum FriendStatus {
+  PENDING
+  ACCEPTED
+  BLOCKED
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  displayName  String
+  username     String   @unique
+  avatarUrl    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // other relations you already have
+  rooms    RoomMember[]
+  messages Message[]
+
+  // MUST match Friend.a / Friend.b / Friend.requester relation names
+  sentFriends  Friend[] @relation("sent") // I am 'a'
+  recvFriends  Friend[] @relation("recv") // I am 'b'
+  requestsMade Friend[] @relation("requestedBy") // I initiated the request
+  Room         Room[]
+}
+
+model Friend {
+  id          String       @id @default(uuid())
+  aId         String
+  bId         String
+  status      FriendStatus @default(PENDING)
+  requestedBy String // who initiated the request
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relation names MUST match User’s fields above
+  a         User @relation("sent", fields: [aId], references: [id], onDelete: Cascade)
+  b         User @relation("recv", fields: [bId], references: [id], onDelete: Cascade)
+  requester User @relation("requestedBy", fields: [requestedBy], references: [id], onDelete: Cascade)
+
+  // one row per unordered pair (you enforce canonical ordering in code)
+  @@unique([aId, bId])
+  @@index([aId])
+  @@index([bId])
+  @@index([requestedBy])
+}
+
+model Room {
+  id            String       @id @default(uuid())
+  type          RoomType
+  name          String?
+  avatarUrl     String?
+  directKey     String?      @unique
+  createdById   String
+  createdBy     User         @relation(fields: [createdById], references: [id])
+  members       RoomMember[] // <-- needed for include: { members: ... }
+  messages      Message[] // <-- needed for include: { messages: ... }
+  lastMessageAt DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([lastMessageAt])
+}
+
+model RoomMember {
+  roomId     String
+  userId     String
+  role       RoomRole  @default(MEMBER)
+  joinedAt   DateTime  @default(now())
+  lastReadAt DateTime?
+  isMuted    Boolean   @default(false)
+
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([roomId, userId])
+  @@index([userId])
+}
+
+model Message {
+  id        String      @id @default(cuid())
+  roomId    String
+  senderId  String
+  content   String
+  type      MessageType @default(TEXT)
+  replyToId String?
+  editedAt  DateTime?
+  deletedAt DateTime? // <-- needed for where: { deletedAt: null }
+  createdAt DateTime    @default(now())
+
+  room   Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  sender User @relation(fields: [senderId], references: [id]) // <-- needed for include: { sender: true }
+
+  // (optional) threaded replies
+  replyTo Message?  @relation("MessageReplies", fields: [replyToId], references: [id])
+  replies Message[] @relation("MessageReplies")
+}
