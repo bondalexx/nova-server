@@ -39,6 +39,7 @@ export async function requestFriend(req: Request, res: Response) {
       where: { username },
       select: { id: true },
     });
+    console.log(username, target);
     if (!target) return res.status(404).json({ error: "User not found" });
 
     const other = target.id;

@@ -106,3 +106,17 @@ export async function me(req: Request, res: Response) {
     updatedAt: user.updatedAt,
   });
 }
+
+export async function editProfile(req: Request, res: Response) {
+  if (!req.user?.id) return res.status(401).json({ error: "Unauthorized" });
+
+  const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+  if (!user) return res.status(401).json({ error: "Unauthorized" });
+
+  const { displayName, email } = req.body;
+  const updated = await prisma.user.update({
+    where: { id: req.user.id },
+    data: { displayName, email },
+  });
+  return res.json(updated);
+}

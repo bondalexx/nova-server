@@ -6,18 +6,26 @@ import { prisma } from "./lib/prisma";
 import { Server } from "socket.io";
 
 const PORT = Number(process.env.PORT ?? 4000);
-const CORS_ORIGIN = process.env.CORS_ORIGIN ?? "http://localhost:3000";
+const CORS_ORIGIN = ["http://localhost:3000", "http://localhost:8081"];
+// const CORS_ORIGIN = "http://localhost:8081";
 
 const server = http.createServer(app);
 
 export const io = new Server(server, {
-  path: "/socket.io", // <— match client
+  path: "/socket.io",
   transports: ["websocket", "polling"],
   cors: {
-    origin: CORS_ORIGIN,
+    origin: function (origin, callback) {
+      if (!origin) return callback(null, true);
+
+      if (CORS_ORIGIN.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
     credentials: true,
   },
-  // (optional) tune dev keepalive; defaults are fine
   pingTimeout: 20000,
   pingInterval: 25000,
 });
